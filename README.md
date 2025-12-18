@@ -1,4 +1,4 @@
-# Índice Geral - Projeto Nominatim com Docker
+# Projeto Nominatim (local) com Docker
 
 Este repositório contém a configuração completa do **Nominatim com Docker**, incluindo documentação separada por tema para facilitar consulta e manutenção.
 
@@ -35,6 +35,16 @@ Manual rápido de operação:
 - Restaurar volumes a partir de backup
 - Atualizar imagens Docker
 - Simular alerta de disco
+
+---
+
+### 4. [README-capacidades.md](/docs/capacidades.md)
+O que o Nominatim resolve (e o que não resolve):
+- Geocodificação e reverse geocoding
+- Busca geográfica e integração com sistemas
+- Aplicações em rastreamento
+- Limitações: mapas, rotas, cercas e visualização
+- Ferramentas complementares recomendadas
 
 ---
 
