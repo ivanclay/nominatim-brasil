@@ -1,0 +1,21 @@
+# Volumes persistentes do Postgres e Nominatim
+postgres-data/
+nominatim-data/
+
+# Logs e arquivos temporários
+logs/
+*.log
+
+# Backups automáticos
+backup/
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos temporários de editor
+*.swp
+*.swo
+
+# Arquivos de ambiente
+.env

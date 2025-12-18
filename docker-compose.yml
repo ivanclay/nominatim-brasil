@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: nominatim-postgres
+    environment:
+      - POSTGRES_USER=nominatim
+      - POSTGRES_PASSWORD=senha123
+      - POSTGRES_DB=nominatim
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:6
+    container_name: nominatim-redis
+    restart: always
+
+  nominatim:
+    image: mediagis/nominatim:4.4
+    container_name: nominatim-brasil
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nominatim-data:/var/lib/nominatim
+      - ./brazil-latest.osm.pbf:/app/data.osm.pbf
+    environment:
+      - PBF=/app/data.osm.pbf
+      - IMPORT=1
+      - THREADS=4
+      - NOMINATIM_PASSWORD=senha123
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=nominatim
+      - POSTGRES_DB=nominatim
+      - POSTGRES_PASSWORD=senha123
+      - REDIS_HOST=redis
+    entrypoint: >
+      bash -c "
+      if [ ! -f /app/data.osm.pbf ]; then
+        echo 'Baixando dados do Brasil...';
+        wget -O /app/data.osm.pbf https://download.geofabrik.de/south-america/brazil-latest.osm.pbf;
+      fi;
+      /bin/bash /app/start.sh
+      "
+    restart: always
+
+  updater:
+    image: ubuntu:22.04
+    container_name: nominatim-updater
+    volumes:
+      - ./brazil-latest.osm.pbf:/app/data.osm.pbf
+      - ./logs:/var/log/nominatim
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y wget cron mailutils &&
+      echo '0 3 * * * wget -O /app/data.osm.pbf https://download.geofabrik.de/south-america/brazil-latest.osm.pbf >> /var/log/nominatim/update.log 2>&1 && docker exec nominatim-brasil nominatim refresh --input-file=/app/data.osm.pbf >> /var/log/nominatim/update.log 2>&1 || echo \"Update failed on $(date)\" | mail -s \"Nominatim Update Failed\" seuemail@dominio.com' > /etc/cron.d/nominatim-update &&
+      cron -f
+      "
+    restart: always
+
+  cleaner:
+    image: ubuntu:22.04
+    container_name: nominatim-cleaner
+    volumes:
+      - ./logs:/var/log/nominatim
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./nominatim-data:/var/lib/nominatim
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y cron &&
+      echo '0 4 * * * find /var/log/nominatim -type f -name \"*.log\" -mtime +7 -delete' > /etc/cron.d/log-clean &&
+      echo '0 4 * * * find /var/lib/postgresql/data/pg_log -type f -mtime +14 -delete' >> /etc/cron.d/log-clean &&
+      echo '0 4 * * * docker exec nominatim-postgres vacuumdb --all --analyze' >> /etc/cron.d/log-clean &&
+      cron -f
+      "
+    restart: always
+
+  disk-monitor:
+    image: ubuntu:22.04
+    container_name: nominatim-disk-monitor
+    volumes:
+      - ./logs:/var/log/nominatim
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y cron mailutils &&
+      echo '*/30 * * * * USAGE=$(df -h /var/log/nominatim | awk \"NR==2 {print \$5}\" | sed \"s/%//\"); if [ \$USAGE -gt 80 ]; then echo \"Disk usage at \$USAGE% on $(date)\" | mail -s \"Nominatim Disk Alert\" seuemail@dominio.com; fi' > /etc/cron.d/disk-monitor &&
+      cron -f
+      "
+    restart: always
+
+  backup:
+    image: ubuntu:22.04
+    container_name: nominatim-backup
+    volumes:
+      - ./backup:/backup
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./nominatim-data:/var/lib/nominatim
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y cron tar mailutils &&
+      echo '0 2 * * * tar czf /backup/postgres-backup-$(date +\\%F).tar.gz /var/lib/postgresql/data && tar czf /backup/nominatim-backup-$(date +\\%F).tar.gz /var/lib/nominatim || echo \"Backup failed on $(date)\" | mail -s \"Nominatim Backup Failed\" seuemail@dominio.com' > /etc/cron.d/nominatim-backup &&
+      cron -f
+      "
+    restart: always
